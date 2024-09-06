@@ -1,6 +1,10 @@
-const token = "6907573108:AAFouwdQ2jfO04ZhcEsqtPI3Wd5sOxB9310";
+// token
+require("dotenv").config();
+const TOKEN = process.env.TOKEN;
+
+// create telegram bot config
 const TelegramBot = require("node-telegram-bot-api");
-const bot = new TelegramBot(token, { polling: true });
+const bot = new TelegramBot(TOKEN, { polling: true });
 
 // Admins id
 const admins = [298444246];
