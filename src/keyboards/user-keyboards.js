@@ -11,8 +11,8 @@ const premiumMembershipInlineKeyboards = {
   parse_mode: "Markdown",
   reply_markup: {
     inline_keyboard: [
-      [{ text: "A'zo bo'lish", url: "https://t.me/mryaxyobek" }],
-      [{ text: "Ba'tafsil ma'lumot", url: "https://t.me/mryaxyobek" }],
+      [{ text: "A'zo bo'lish ⭐️", url: "https://t.me/mryaxyobek" }],
+      [{ text: "Ba'tafsil ma'lumot 📄", url: "https://t.me/mryaxyobek" }],
     ],
   },
 };
@@ -21,8 +21,8 @@ const contactInlineKeyboards = {
   parse_mode: "Markdown",
   reply_markup: {
     inline_keyboard: [
-      [{ text: "Admin", url: "https://t.me/mryaxyobek" }],
-      [{ text: "Bot", url: "https://t.me/mryaxyobek" }],
+      [{ text: "Admin 👤", url: "https://t.me/mryaxyobek" }],
+      [{ text: "Bot 🤖", url: "https://t.me/mryaxyobek" }],
     ],
   },
 };

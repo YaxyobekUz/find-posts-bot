@@ -17,8 +17,8 @@ const controlAdminsInlineKeyboards = {
     resize_keyboard: true,
     one_time_keyboard: false,
     inline_keyboard: [
-      [{ text: "Admin qo'shish", callback_data: "add_admin" }],
-      [{ text: "Adminni o'chirish", callback_data: "delete_admin" }],
+      [{ text: "Admin qo'shish ⏬", callback_data: "add_admin" }],
+      [{ text: "Adminni o'chirish 🗑", callback_data: "delete_admin" }],
     ],
   },
 };

@@ -14,9 +14,9 @@ const controlPostsInlineKeyboards = {
     resize_keyboard: true,
     one_time_keyboard: false,
     inline_keyboard: [
-      [{ text: "Postni qidirish", callback_data: "search_post" }],
-      [{ text: "Yangi post qo'shish", callback_data: "add_post" }],
-      [{ text: "Postni tahrirlash", callback_data: "edit_post" }],
+      [{ text: "Postni qidirish 🔍", callback_data: "search_post" }],
+      [{ text: "Yangi post qo'shish ⏬", callback_data: "add_post" }],
+      [{ text: "Postni tahrirlash 📝", callback_data: "edit_post" }],
     ],
   },
 };
