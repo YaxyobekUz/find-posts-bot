@@ -4,10 +4,11 @@ const bot = new TelegramBot(process.env.TOKEN, { polling: true });
 
 const { backKeyboard } = require("./src/keyboards/global-keyboards");
 const { ownerKeyboards, controlAdminsInlineKeyboards } = require("./src/keyboards/owner-keyboards");
-const { controlPostsInlineKeyboards, adminKeyboards, } = require("./src/keyboards/admin-keyboards");
+const { controlPostsInlineKeyboards, adminKeyboards, securityInlineKeyboards, } = require("./src/keyboards/admin-keyboards");
 const { userKeyboards, premiumMembershipInlineKeyboards, contactInlineKeyboards, } = require("./src/keyboards/user-keyboards");
 
 let savedPosts = {};
+let dbChannelId = null;
 let ownerPassword = 1234;
 let currentAdminState = {};
 let admins = [{ id: 298444246, type: "owner" }];
@@ -60,8 +61,12 @@ const adminsDataToText = (adminsDataArray) => {
 // --- Bot Listeners ---
 
 bot.onText(/\/start/, (msg) => {
+
   // chat id (user id)
   const chatId = msg.chat.id;
+
+  // clear admin state
+  delete currentAdminState[chatId];
 
   // greeting messages
   const userGreeting = `Assalomu alaykum ☺️\nXush kelibsiz, hurmatli *foydalanuvchi!*`;
@@ -118,6 +123,29 @@ bot.on("message", (msg) => {
         // back to homepage
         delete currentAdminState[chatId];
         setupAdminKeyboards(chatId, "Post saqlandi va kanalga yuborildi ✅");
+      }
+
+      // error
+      else {
+        bot.sendMessage(chatId, "*Xato ⚠️*\n\nID raqam noto'g'ri yoki ushbu ID raqam bilan bog'liq post mavjud.\nIltimos muqobil ID raqam kiritib qayta urinib ko'ring! ☺️", { parse_mode: "Markdown" });
+      }
+    }
+
+    // awaiting id and save the post  
+    else if (currentAdminState[chatId] === "awaiting_edit_post_id" && !isBack) {
+      const postId = Number(text);
+
+      // check if post already saved
+      if (!isNaN(postId) && !savedPosts[postId]) {
+        // save post
+        savedPosts[postId] = currentAdminState[chatId].post;
+
+        // send post to database channel
+        sendPost(dbChannelId, savedPosts[postId]);
+
+        // back to homepage
+        delete currentAdminState[chatId];
+        setupAdminKeyboards(chatId, `Post saqlandi va ma'lumotlar ombori kanaliga ${dbChannelId ? "yuborildi" : "yuborilmadi."} ✅`);
       }
 
       // error
@@ -203,7 +231,7 @@ bot.on("message", (msg) => {
       bot.sendMessage(chatId, msg, controlPostsInlineKeyboards);
     }
 
-    // send control posts message
+    // send control admins message
     else if (text === "Adminlar 👥") {
       const adminsList = adminsDataToText(admins);
 
@@ -211,11 +239,18 @@ bot.on("message", (msg) => {
       bot.sendMessage(chatId, msg, controlAdminsInlineKeyboards);
     }
 
+    // send control admins message
+    else if (text === "Xavfsizlik 🔐") {
+      const msg = `*Xavfsizlik 🔐*\n\nQuyidagi tugmalar orqali sizga kerakli bo'lgan ma'lumotlarni oson oling!\nEndi nima qilamiz?`
+      bot.sendMessage(chatId, msg, securityInlineKeyboards);
+    }
+
     // cancel the action
     else if (currentAdminState[chatId] && isBack) {
       handleBack(chatId);
     }
   }
+
 
   // for user
   else {
@@ -247,26 +282,56 @@ bot.on("callback_query", (query) => {
   switch (query.data) {
     // for post
     case "add_post":
-      bot.sendMessage(chatId, "Iltimos, menga postni yuboring!", backKeyboard);
+      bot.sendMessage(chatId, "Iltimos, menga saqlamoqchi bo'lgan postingizni yuboring!", backKeyboard);
       currentAdminState[chatId] = "awaiting_post";
       break;
     case "edit_post":
-      bot.sendMessage(chatId, "Tahrirlamoqchi bo'lgan postingizning ID raqamini kiriting!", backKeyboard);
+      bot.sendMessage(chatId, "Iltimos tahrirlamoqchi bo'lgan postingizning ID raqamini kiriting!", backKeyboard);
       currentAdminState[chatId] = "awaiting_edit_post_id";
       break;
     case "search_post":
-      bot.sendMessage(chatId, "Qidirmoqchi bo'lgan postingizning ID raqamini kiriting!", backKeyboard);
+      bot.sendMessage(chatId, "Iltimos qidirmoqchi bo'lgan postingizning ID raqamini kiriting!", backKeyboard);
       currentAdminState[chatId] = "awaiting_search_post_id";
       break;
 
     // for admins
     case "add_admin":
-      bot.sendMessage(chatId, "Admin qilmoqchi bo'lgan foydalanuvchining ID raqamini kiriting!", backKeyboard);
+      bot.sendMessage(chatId, "Iltimos admin qilmoqchi bo'lgan foydalanuvchining ID raqamini kiriting!", backKeyboard);
       currentAdminState[chatId] = "awaiting_admin_id";
       break;
     case "delete_admin":
-      bot.sendMessage(chatId, "O'chirmoqchi bo'lgan adminning ID raqamini kiriting!", backKeyboard);
+      bot.sendMessage(chatId, "Iltimos o'chirmoqchi bo'lgan adminning ID raqamini kiriting!", backKeyboard);
       currentAdminState[chatId] = "awaiting_delete_admin_id";
+      break;
+
+    // security
+    case "posts_data":
+      const postsData = Object.keys(savedPosts);
+      const maxPosts = Math.ceil(postsData.length / 10);
+
+      if (maxPosts > 0) {
+        for (let index = 0; index < maxPosts; index++) {
+          // splitting 10 posts in each iteration
+          const slicedPosts = postsData.slice(index * 10, (index + 1) * 10);
+
+          // create msg title
+          const title = `*Postlar ${index * 10 + 1} - ${(index + 1) * 10}*\n\n`;
+
+          // create msg body
+          const posts = {};
+          slicedPosts.forEach((postId) => posts[postId] = savedPosts[postId]);
+          const body = "```javascript const savedPosts = " + JSON.stringify(posts) + "```";
+
+          // send msg to admin
+          bot.sendMessage(chatId, title + body, { parse_mode: 'Markdown' });
+        }
+      } else bot.sendMessage(chatId, "Hali postlar mavjud emas!");
+      break;
+    case "admins_data":
+      const body = "*Adminlar ma'lumotlari*\n\n```javascript const admins = " + JSON.stringify(admins) + "```";
+
+      // send msg to admin
+      bot.sendMessage(chatId, body, { parse_mode: 'Markdown' });
       break;
   }
 });
