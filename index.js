@@ -1,35 +1,98 @@
+// ---- CREATE BOT CONFIGURATION ----
+
 require("dotenv").config();
 const TelegramBot = require("node-telegram-bot-api");
 const bot = new TelegramBot(process.env.TOKEN, { polling: true });
 
+
+
+// ---- KEYBOARDS ----
+
 const { backKeyboard } = require("./src/keyboards/global-keyboards");
 const { ownerKeyboards, controlAdminsInlineKeyboards } = require("./src/keyboards/owner-keyboards");
-const { controlPostsInlineKeyboards, adminKeyboards, securityInlineKeyboards, } = require("./src/keyboards/admin-keyboards");
 const { userKeyboards, premiumMembershipInlineKeyboards, contactInlineKeyboards, } = require("./src/keyboards/user-keyboards");
+const { controlPostsInlineKeyboards, adminKeyboards, securityInlineKeyboards, sponsoredChannelsInlineKeyboards, } = require("./src/keyboards/admin-keyboards");
+
+
+
+// --- DATA ---- 
 
 let savedPosts = {};
 let dbChannelId = null;
-let ownerPassword = 1234;
 let currentAdminState = {};
 let admins = [{ id: 298444246, type: "owner" }];
+const sponsoredChannels = [{ username: "tarjima_kinolar_gc" }];
 
-// --- Helper Functions ---
+
+
+// ---- HELPER FUNCTIONS ----
 
 const isAdmin = (id) => admins.find((admin) => admin.id === id);
 const isOwner = (id) => admins.find((admin) => admin.id === id && admin.type === "owner");
 const sendPost = (chatId, post) => {
+  // --- Helpers ---
   const options = { caption: post.caption || "" };
+  const checkPostType = (type) => post.type === type;
+  const sendMsg = ({ showCaption = false }) => {
+    bot.sendMessage(chatId, post.content, showCaption ? options : {})
+  };
 
-  // send post by type 
-  switch (post.type) {
-    case "text": return bot.sendMessage(chatId, post.content,);
-    case "photo": return bot.sendPhoto(chatId, post.content, options);
-    case "document": return bot.sendDocument(chatId, post.content, options);
-    case "video": return bot.sendVideo(chatId, post.content, options);
-    case "sticker": return bot.sendSticker(chatId, post.content);
-    case "animation": return bot.sendAnimation(chatId, post.content, options);
+  // --- Send post by type ---
+
+  // text
+  if (checkPostType("text")) {
+    sendMsg();
   }
+  // sticker
+  else if (checkPostType("sticker")) {
+    sendMsg();
+  }
+  // photo
+  else if (checkPostType("photo")) {
+    sendMsg({ showCaption: true });
+  }
+  // document
+  else if (checkPostType("document")) {
+    sendMsg({ showCaption: true });
+  }
+  // video
+  else if (checkPostType("video")) {
+    sendMsg({ showCaption: true });
+  }
+  // animation
+  else if (checkPostType("animation")) {
+    sendMsg({ showCaption: true });
+  };
 };
+const getChannelId = async (channelUsername) => {
+  const username = channelUsername[0] === "@" ? channelUsername : "@" + channelUsername;
+  try {
+    const chat = await bot.getChat(username);
+    return chat.id;
+  } catch (error) {
+    return null;
+  }
+}
+const isMembership = async (channelUsername, userId) => {
+  let result = { member: false, error: false };
+  try {
+    const member = await bot.getChatMember("@" + channelUsername, userId);
+    if (member.status === 'member' || member.status === 'administrator' || member.status === 'creator') {
+      result.member = true;
+    }
+  } catch (error) {
+    result.error = "Kanalga obuna bo'lganligingizni tekshirishda xatolik yuz berdi.\nIltimos qayta urinib ko'ring!";
+  }
+  return result;
+}
+const checkUserSubscribed = async (userId) => {
+  let result = true;
+  if (sponsoredChannels.length > 0) {
+    const checkMemberships = await Promise.all(sponsoredChannels.map((channel) => isMembership(channel.username, userId)));
+    result = checkMemberships.every((membership) => membership.member);
+  }
+  return result;
+}
 const checkAndSavePost = (msg) => {
   const post = {};
   if (msg.text) post.type = "text", post.content = msg.text;
@@ -57,38 +120,59 @@ const adminsDataToText = (adminsDataArray) => {
   });
   return list;
 };
+const mandatoryMembershipMsg = (chatId, title = "Botdan foydalanish 🤖") => {
+  const msg = `*${title}*\n\nIltimos botdan foydalanish uchun quyidagi homiy kanallarimizga obuna bo'ling.`;
+  const channelsKeyboards = sponsoredChannels.map((channel, index) => ([{ text: (index + 1) + " - kanal", url: "https://t.me/" + channel.username }]));
 
-// --- Bot Listeners ---
+  bot.sendMessage(chatId, msg, {
+    parse_mode: "Markdown",
+    reply_markup: {
+      resize_keyboard: true,
+      inline_keyboard: [...channelsKeyboards, [{ text: "Tekshirish ✅", callback_data: "check" }]],
+    },
+  });
+}
+
+
+
+// ---- BOT LISTENERS ----
 
 bot.onText(/\/start/, (msg) => {
-
-  // chat id (user id)
   const chatId = msg.chat.id;
+  const userId = msg.from.id;
 
-  // clear admin state
+  // --- CLEAR ADMIN STATE ----
   delete currentAdminState[chatId];
 
-  // greeting messages
-  const userGreeting = `Assalomu alaykum ☺️\nXush kelibsiz, hurmatli *foydalanuvchi!*`;
-  const adminGreeting = `Assalomu alaykum ☺️\nXush kelibsiz, hurmatli *${isOwner(chatId) ? 'ega' : 'admin'}!*`;
+  // --- GREETING MESSAGES ----
+  const userLink = `(tg://user?id=${userId})!\n\n`;
+  const adminGreetingDescription = "Men ishlashga tayyorman! Nima qilamiz?";
+  const userGreetingTitle = `*Assalomu alaykum ☺️*\nXush kelibsiz, hurmatli [foydalanuvchi]${userLink}`;
+  const adminGreetingTitle = `*Assalomu alaykum ☺️*\nXush kelibsiz, hurmatli [${isOwner(chatId) ? 'ega' : 'admin'}]${userLink}`;
+  const userGreetingDescription = "Menga siz qidirayotgan post (video, rasm va hk) ID raqamini yuboring va men sizga shu zahoti postni yuboaraman!";
 
-  // send a greeting message to the admin
+  // --- SEND A GREETING MESSAGE TO ADMIN ---
   if (isAdmin(chatId)) {
-    setupAdminKeyboards(chatId, adminGreeting);
+    setupAdminKeyboards(chatId, adminGreetingTitle + adminGreetingDescription);
   }
-  // send a greeting message to the user
+
+  // --- SEND A GREETING MESSAGE TO USER ---
   else {
-    bot.sendMessage(chatId, userGreeting, userKeyboards);
+    bot.sendMessage(chatId, userGreetingTitle + userGreetingDescription, userKeyboards);
   }
 });
 
-// message
-bot.on("message", (msg) => {
+
+
+// ---- MESSAGES ----
+
+bot.on("message", async (msg) => {
   const text = msg.text;
   const chatId = msg.chat.id;
-  const isBack = text === "◀️ Bekor qilish"
+  const userId = msg.from.id;
+  const isBack = text === "◀️ Bekor qilish";
 
-  // for admin
+  // --- FOR ADMIN ONLY ---
   if (isAdmin(chatId)) {
 
     // awaiting post  
@@ -245,25 +329,39 @@ bot.on("message", (msg) => {
       bot.sendMessage(chatId, msg, securityInlineKeyboards);
     }
 
+    // send control sponsor channels message
+    else if (text === "Homiy kanallar 📣") {
+      const msg = `*Homiy kanallarni boshqarish 📣*\n\nQuyidagi tugmalar orqali sizga kerakli bo'lgan homiy kanallarni oson boshqaring!\nEndi nima qilamiz?`
+      bot.sendMessage(chatId, msg, sponsoredChannelsInlineKeyboards);
+    }
+
     // cancel the action
     else if (currentAdminState[chatId] && isBack) {
       handleBack(chatId);
     }
   }
 
-
-  // for user
+  // --- FOR USER ONLY ---
   else {
+    // Check if user is subscribed to required channels
+    const isSubscribed = await checkUserSubscribed(userId);
+
+    // Send subscription requirement message
+    if (!isSubscribed) return mandatoryMembershipMsg(chatId);
+
     // send a post to the user
     const postId = Number(text);
+
     if (!isNaN(postId)) {
       sendPost(chatId, savedPosts[postId] || { content: "Afsuski post topilmadi! 😔", type: "text" })
     }
+
     // premium membership
     else if (text === "Premium a'zolik ✨") {
       const premiumMembershipMsg = "*Premium a'zolik ✨*\n\nPremium a'zolik - Maxsus premium postlarni olish uchun yaratilingan a'zolik turidir. Hurmatli foydalanuvchi siz premium a'zolikka ega bo'lish orqali botimizning barcha hususiyatlaridan foydalanishingiz mumkin!\n\nPremium a'zolikka ega bo'lish uchun admin bilan bog'laning. ☺️"
       bot.sendMessage(chatId, premiumMembershipMsg, premiumMembershipInlineKeyboards);
     }
+
     // contact
     else if (text === "Bog'lanish ☎️") {
       const contactMsg = "*Bog'lanish ☎️*\n\nBiz bilan tezkor bog'lanish uchun rasmiy adminimiz yoki bot orqali bog'lanishingiz mumkin! ☺️"
@@ -272,66 +370,170 @@ bot.on("message", (msg) => {
   }
 });
 
-// callback
-bot.on("callback_query", (query) => {
-  // chat id (user id)
+
+
+// ---- CALLBACKS ----
+
+bot.on("callback_query", async (query) => {
+
+  const userId = query.from.id;
   const chatId = query.message.chat.id;
+  const msgId = query.message.message_id;
 
-  if (!isAdmin(chatId)) return bot.sendMessage(chatId, "Siz admin emassiz!");
+  // --- HELPERS ---
+  const checkdata = (data) => query.data === data;
+  const updateAdminState = (state) => currentAdminState[chatId] = state;
+  const formatMsg = (title, description) => `*${title}*\n\n${description}`;
+  const sendMsg = (title, description, back = true) => {
+    bot.sendMessage(chatId, formatMsg(title, description), back ? backKeyboard : { parse_mode: "Markdown" });
+  }
 
-  switch (query.data) {
-    // for post
-    case "add_post":
-      bot.sendMessage(chatId, "Iltimos, menga saqlamoqchi bo'lgan postingizni yuboring!", backKeyboard);
-      currentAdminState[chatId] = "awaiting_post";
-      break;
-    case "edit_post":
-      bot.sendMessage(chatId, "Iltimos tahrirlamoqchi bo'lgan postingizning ID raqamini kiriting!", backKeyboard);
-      currentAdminState[chatId] = "awaiting_edit_post_id";
-      break;
-    case "search_post":
-      bot.sendMessage(chatId, "Iltimos qidirmoqchi bo'lgan postingizning ID raqamini kiriting!", backKeyboard);
-      currentAdminState[chatId] = "awaiting_search_post_id";
-      break;
+  // --- FOR ADMIN ONLY ---
+  if (isAdmin(chatId)) {
+    //  --- Post ---
 
-    // for admins
-    case "add_admin":
-      bot.sendMessage(chatId, "Iltimos admin qilmoqchi bo'lgan foydalanuvchining ID raqamini kiriting!", backKeyboard);
-      currentAdminState[chatId] = "awaiting_admin_id";
-      break;
-    case "delete_admin":
-      bot.sendMessage(chatId, "Iltimos o'chirmoqchi bo'lgan adminning ID raqamini kiriting!", backKeyboard);
-      currentAdminState[chatId] = "awaiting_delete_admin_id";
-      break;
+    // add new post
+    if (checkdata("add_post")) {
+      const title = "Yangi post qo'shish ⏬";
+      const description = "Yaxshi, endi esa iltimos menga saqlamoqchi bo'lgan postingizni yuboring!";
 
-    // security
-    case "posts_data":
+      sendMsg(title, description);
+      updateAdminState("awaiting_post");
+    }
+
+    // edit post
+    else if (checkdata("edit_post")) {
+      const title = "Postni tahrirlash 📝";
+      const description = "Yaxshi, endi esa iltimos menga tahrirlamoqchi bo'lgan postingizning ID raqamini yuboring!";
+
+      sendMsg(title, description);
+      updateAdminState("awaiting_edit_post_id");
+    }
+
+    // search post
+    else if (checkdata("search_post")) {
+      const title = "Postni qidirish 🔍";
+      const description = "Yaxshi, endi esa iltimos menga qidirmoqchi bo'lgan postingizning ID raqamini yuboring!";
+
+      sendMsg(title, description);
+      updateAdminState("awaiting_search_post_id");
+    }
+
+    // --- Admin ---
+
+    // add admin
+    else if (checkdata("add_admin")) {
+      const title = "Admin qo'shish ⏬";
+      const description = "Yaxshi, endi esa iltimos menga admin qilmoqchi bo'lgan foydalanuvchining ID raqamini yuboring!";
+
+      sendMsg(title, description);
+      updateAdminState("awaiting_admin_id");
+    }
+
+    // delete admin
+    else if (checkdata("delete_admin")) {
+      const title = "Adminni o'chirish 🗑";
+      const description = "Yaxshi, endi esa iltimos menga o'chirmoqchi bo'lgan adminning ID raqamini yuboring!";
+
+      sendMsg(title, description);
+      updateAdminState("awaiting_delete_admin_id");
+    }
+
+    // --- Security ---
+
+    // send posts data to admin
+    else if (checkdata("posts_data")) {
+      const title = "Postlar ma'lumoti 📮";
       const postsData = Object.keys(savedPosts);
       const maxPosts = Math.ceil(postsData.length / 10);
 
+      // send posts data
       if (maxPosts > 0) {
         for (let index = 0; index < maxPosts; index++) {
+          const posts = {};
+
           // splitting 10 posts in each iteration
           const slicedPosts = postsData.slice(index * 10, (index + 1) * 10);
-
-          // create msg title
-          const title = `*Postlar ${index * 10 + 1} - ${(index + 1) * 10}*\n\n`;
-
-          // create msg body
-          const posts = {};
           slicedPosts.forEach((postId) => posts[postId] = savedPosts[postId]);
-          const body = "```javascript const savedPosts = " + JSON.stringify(posts) + "```";
+
+          // msg data
+          const subTitle = `*Postlar ${index * 10 + 1} - ${(index + 1) * 10}*\n\n`;
+          const description = "```JavaScript const posts = " + JSON.stringify(posts) + "```";
 
           // send msg to admin
-          bot.sendMessage(chatId, title + body, { parse_mode: 'Markdown' });
+          sendMsg(title, subTitle + description, false);
         }
-      } else bot.sendMessage(chatId, "Hali postlar mavjud emas!");
-      break;
-    case "admins_data":
-      const body = "*Adminlar ma'lumotlari*\n\n```javascript const admins = " + JSON.stringify(admins) + "```";
+      } else {
+        sendMsg(title, "Hech qanday postlar ma'lumoti topilmadi!");
+      }
+    }
+
+    // send admins data to admin
+    else if (checkdata("admins_data")) {
+      const title = "Adminlar ma'lumoti 👥";
+      const description = "```JavaScript const admins = " + JSON.stringify(admins) + "```";
 
       // send msg to admin
-      bot.sendMessage(chatId, body, { parse_mode: 'Markdown' });
-      break;
+      sendMsg(title, description, false);
+    }
+
+    // --- Sponsor channels ---
+
+    // send sponsor channels information to adminx
+    else if (checkdata("channels_data")) {
+      let description = "";
+      const title = "Kanallar ma'lumoti 📮";
+
+      if (sponsoredChannels.length > 0) {
+        sponsoredChannels.forEach((channel, index) => {
+          description += `${index + 1}. [${channel.name}](https:t.me/${channel.username})`;
+        });
+
+        // send msg to admin
+        sendMsg(title, description, false);
+      } else {
+        description = "Hech qanday kanallar ma'lumoti topilmadi!";
+        sendMsg(title, description, false);
+      }
+    }
+
+    // add new channel
+    else if (checkdata("add_channel")) {
+      const title = "Yangi kanal qo'shish ⏬";
+      const description = "Yaxshi, endi esa iltimos menga qo'shmoqchi bo'lgan kanalning ID raqamini yuboring!";
+
+      // 
+      sponsoredChannels.forEach((channel, index) => {
+        msgBody += `${index + 1}. [${channel.name}](https:t.me/${channel.username})`;
+      });
+
+      // send msg to admin
+      sendMsg(title, description);
+      updateAdminState("awaiting_channel_username");
+    }
+
+    // --- Invalid callback message ---
+    else {
+      const title = "Xatolik ⚠️";
+      const description = "Tugmalar bilan bog'liq noma'lum xatolik yuz berdi! Iltimos qayta urinib ko'ring. Agar xatolik takroran yuz bersa iltimos adminga xatolik haqida xabar bering. Rahmat!";
+      sendMsg(title, description, false);
+    }
+  }
+
+  // --- FOR USER ONLY ---
+  else {
+    const isSubscribed = await checkUserSubscribed(userId);
+
+    // --- Send subscription requirement message ---
+    if (isSubscribed) {
+      const title = "Muvaffaqiyatli 🎉";
+      const description = "Siz bizning barcha kanallarimizga obuna bo'ldingiz. Endi esa botdan foydalanishingiz mumkin. Rahmat! ☺️";
+
+      // send message
+      bot.deleteMessage(chatId, msgId);
+      sendMsg(title, description, false);
+    } else {
+      return mandatoryMembershipMsg(chatId, "Barcha kanallarga obuna bo'lmagansiz ❌");
+    }
   }
 });
