@@ -1,5 +1,7 @@
+const parse_mode = "markdown";
+
 const adminKeyboards = {
-  parse_mode: "Markdown",
+  parse_mode,
   reply_markup: {
     resize_keyboard: true,
     one_time_keyboard: false,
@@ -8,7 +10,7 @@ const adminKeyboards = {
 };
 
 const securityInlineKeyboards = {
-  parse_mode: "Markdown",
+  parse_mode,
   reply_markup: {
     resize_keyboard: true,
     inline_keyboard: [
@@ -18,8 +20,20 @@ const securityInlineKeyboards = {
   },
 };
 
+const sponsoredChannelsInlineKeyboards = {
+  parse_mode,
+  reply_markup: {
+    resize_keyboard: true,
+    inline_keyboard: [
+      [{ text: "Kanallar ma'lumoti 📮", callback_data: "channels_data" },],
+      [{ text: "Yangi kanal qo'shish ⏬", callback_data: "add_channel" },],
+      [{ text: "Kanalni o'chirish 🗑", callback_data: "delete_channel" },],
+    ],
+  },
+};
+
 const controlPostsInlineKeyboards = {
-  parse_mode: "Markdown",
+  parse_mode,
   reply_markup: {
     remove_keyboard: true,
     inline_keyboard: [
@@ -30,4 +44,4 @@ const controlPostsInlineKeyboards = {
   },
 };
 
-module.exports = { adminKeyboards, controlPostsInlineKeyboards, securityInlineKeyboards };
+module.exports = { adminKeyboards, controlPostsInlineKeyboards, securityInlineKeyboards, sponsoredChannelsInlineKeyboards };
